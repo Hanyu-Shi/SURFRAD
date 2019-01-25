@@ -4,7 +4,7 @@ program main
     character(len=3)::site_name,tmp2
     character(len=4)::tmp5
     character(len=80)::infolder,outfolder,datafolder
-    character(len=100)::infile,outfile_albedo,outfile_PAR,outfile_aod
+    character(len=100)::infile,outfile_albedo,outfile_PAR,outfile_aod,outfile_ISR
     integer::year,i,nlines,j,doy
     logical::alive
     integer::month_days_arr(12)
@@ -13,26 +13,31 @@ program main
 
     datafolder = "Bondville"
     site_name = "bon"
-    year = 2005
 
     ! deal rad files
     infolder = "G:/"//trim(adjustl(datafolder))//"/surfrad/rad/"
     outfolder = "G:/"//trim(adjustl(datafolder))//"/surfrad/"
     outfile_albedo = trim(adjustl(trim(outfolder) // "surfrad_albedo"))
     outfile_PAR = trim(adjustl(trim(outfolder) // "surfrad_PAR"))
+    outfile_ISR = trim(adjustl(trim(outfolder) // "surfrad_ISR"))
 
     call clear_file_content(outfile_albedo)
     call clear_file_content(outfile_PAR)
+    call clear_file_content(outfile_ISR)
 
-    write(tmp1,'(I2.2)') mod(year,100)
-    do i=1,366
-        write(tmp2,'(I3.3)') i
-        infile = trim(adjustl(trim(infolder) // site_name // tmp1 // tmp2 // ".dat"))
-
-        inquire(file=infile,exist=alive)
-        if(.not. alive) cycle
-        call file_lines(infile,nlines)
-        call read_rad_data(infile,outfile_albedo,outfile_PAR,nlines-2)
+    do j=2016,2017
+        year = j
+        write(tmp5,'(I4.4)') year
+        ! deal rad files
+        write(tmp1,'(I2.2)') mod(year,100)
+        do i=1,366
+            write(tmp2,'(I3.3)') i
+            infile = trim(adjustl(trim(infolder) // site_name // tmp1 // tmp2 // ".dat"))
+            inquire(file=infile,exist=alive)
+            if(.not. alive) cycle
+            call file_lines(infile,nlines)
+            call read_rad_data(infile,outfile_albedo,outfile_PAR,outfile_ISR,nlines-2)
+        enddo
     enddo
 
     ! deal aod files
@@ -103,10 +108,10 @@ subroutine cal_ang_aod550(aod502,aod614,angstrom,aod550)
 end subroutine
 
 
-subroutine read_rad_data(infile,outfile_albedo,outfile_PAR,nlines)
+subroutine read_rad_data(infile,outfile_albedo,outfile_PAR,outfile_ISR,nlines)
     implicit none
     integer::nlines
-    character(len=100)::station_name, infile, outfile_albedo,outfile_PAR
+    character(len=100)::station_name, infile, outfile_albedo,outfile_PAR,outfile_ISR
 
     integer::year,month,day,jday,elevation
     integer::minute(nlines),hour(nlines)
@@ -161,7 +166,7 @@ subroutine read_rad_data(infile,outfile_albedo,outfile_PAR,nlines)
             .and. (dw_solar(i)>uw_solar(i))) then
             time = jday + dt(i) / 24.0
             albedo = uw_solar(i) / dw_solar(i)
-            write(lun_out,"(f8.4,2x,f6.4)")time,albedo
+            write(lun_out,"(I4,2x,f8.4,2x,f6.4)")year, time,albedo
         endif
     enddo
     close(lun_out)
@@ -171,7 +176,17 @@ subroutine read_rad_data(infile,outfile_albedo,outfile_PAR,nlines)
     do i = 1, icount
         if(qc_par(i)==0) then
             time = jday + dt(i) / 24.0
-            write(lun_out,"(f8.4,2x,f7.1)")time,par(i)
+            write(lun_out,"(I4,2x,f8.4,2x,f7.1)")year,time,par(i)
+        endif
+    enddo
+    close(lun_out)
+
+    lun_out = 20
+    open(unit=lun_out,file=trim(outfile_ISR),status='old',position='append')
+    do i = 1, icount
+        if((qc_dwsolar(i)==0) .and. (dw_solar(i) >= 0)) then
+            time = jday + dt(i) / 24.0
+            write(lun_out,"(I4,2x,f8.4,2x,f7.1)")year,time,dw_solar(i)
         endif
     enddo
     close(lun_out)
